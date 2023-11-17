@@ -15,7 +15,7 @@ use rand::seq::SliceRandom;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::{Battlesnake, Board, Game};
+use crate::{Battlesnake, Board, Coord, Game};
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
@@ -25,10 +25,10 @@ pub fn info() -> Value {
 
     return json!({
         "apiversion": "1",
-        "author": "", // TODO: Your Battlesnake Username
-        "color": "#888888", // TODO: Choose color
-        "head": "default", // TODO: Choose head
-        "tail": "default", // TODO: Choose tail
+        "author": "blacktemplar",
+        "color": "#1d682b",
+        "head": "rose",
+        "tail": "flytrap",
     });
 }
 
@@ -45,57 +45,38 @@ pub fn end(_game: &Game, _turn: &u32, _board: &Board, _you: &Battlesnake) {
 // move is called on every turn and returns your next move
 // Valid moves are "up", "down", "left", or "right"
 // See https://docs.battlesnake.com/api/example-move for available data
-pub fn get_move(_game: &Game, turn: &u32, _board: &Board, you: &Battlesnake) -> Value {
-    
-    let mut is_move_safe: HashMap<_, _> = vec![
-        ("up", true),
-        ("down", true),
-        ("left", true),
-        ("right", true),
+pub fn get_move(_game: &Game, turn: &u32, board: &Board, you: &Battlesnake) -> Value {
+    let my_head = &you.body[0]; // Coordinates of your head
+
+    let safe_moves: Vec<_> = [
+        ("up", Coord::new(my_head.x, my_head.y + 1)),
+        ("down", Coord::new(my_head.x, my_head.y.wrapping_sub(1))),
+        ("left", Coord::new(my_head.x.wrapping_sub(1), my_head.y)),
+        ("right", Coord::new(my_head.x + 1, my_head.y)),
     ]
-    .into_iter()
+    .iter()
+    .filter(|(_, coord)| is_field_safe(coord, board))
+    .map(|(m, _)| *m)
     .collect();
 
-    // We've included code to prevent your Battlesnake from moving backwards
-    let my_head = &you.body[0]; // Coordinates of your head
-    let my_neck = &you.body[1]; // Coordinates of your "neck"
-    
-    if my_neck.x < my_head.x { // Neck is left of head, don't move left
-        is_move_safe.insert("left", false);
-
-    } else if my_neck.x > my_head.x { // Neck is right of head, don't move right
-        is_move_safe.insert("right", false);
-
-    } else if my_neck.y < my_head.y { // Neck is below head, don't move down
-        is_move_safe.insert("down", false);
-    
-    } else if my_neck.y > my_head.y { // Neck is above head, don't move up
-        is_move_safe.insert("up", false);
-    }
-
-    // TODO: Step 1 - Prevent your Battlesnake from moving out of bounds
-    // let board_width = &board.width;
-    // let board_height = &board.height;
-
-    // TODO: Step 2 - Prevent your Battlesnake from colliding with itself
-    // let my_body = &you.body;
-
-    // TODO: Step 3 - Prevent your Battlesnake from colliding with other Battlesnakes
-    // let opponents = &board.snakes;
-
-    // Are there any safe moves left?
-    let safe_moves = is_move_safe
-        .into_iter()
-        .filter(|&(_, v)| v)
-        .map(|(k, _)| k)
-        .collect::<Vec<_>>();
-    
     // Choose a random move from the safe ones
-    let chosen = safe_moves.choose(&mut rand::thread_rng()).unwrap();
+    let chosen = safe_moves
+        .choose(&mut rand::thread_rng())
+        .unwrap_or(&"left");
 
     // TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
     // let food = &board.food;
 
     info!("MOVE {}: {}", turn, chosen);
     return json!({ "move": chosen });
+}
+
+fn is_field_safe(coord: &Coord, board: &Board) -> bool {
+    coord.x < board.width
+        && coord.y < board.height
+        && board
+            .snakes
+            .iter()
+            .flat_map(|s| s.body.iter().rev().skip(1))
+            .all(|c| c != coord)
 }

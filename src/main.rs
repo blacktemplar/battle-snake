@@ -6,7 +6,7 @@ use rocket::fairing::AdHoc;
 use rocket::http::Status;
 use rocket::serde::{json::Json, Deserialize};
 use serde::Serialize;
-use serde_json::{Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::env;
 
@@ -43,10 +43,19 @@ pub struct Battlesnake {
     shout: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct Coord {
     x: u32,
     y: u32,
+}
+
+impl Coord {
+    pub fn new(x: u32, y: u32) -> Self {
+        Self {
+            x,
+            y,
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug)]
