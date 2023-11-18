@@ -11,24 +11,22 @@
 // For more info see docs.battlesnake.com
 
 use log::info;
-use rand::seq::SliceRandom;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 
-use crate::{Battlesnake, Board, Coord, Game};
+use crate::{AppConfig, Battlesnake, Board, Coord, Game};
 
 // info is called when you create your Battlesnake on play.battlesnake.com
 // and controls your Battlesnake's appearance
 // TIP: If you open your Battlesnake URL in a browser you should see this data
-pub fn info() -> Value {
+pub fn info(config: &AppConfig) -> Value {
     info!("INFO");
 
     return json!({
         "apiversion": "1",
         "author": "blacktemplar",
-        "color": "#1d682b",
-        "head": "rose",
-        "tail": "flytrap",
+        "color": config.color, //"#1d682b",
+        "head": config.head, //"rose",
+        "tail": config.tail, //"flytrap",
     });
 }
 
@@ -54,15 +52,12 @@ pub fn get_move(_game: &Game, turn: &u32, board: &Board, you: &Battlesnake) -> V
         ("left", Coord::new(my_head.x.wrapping_sub(1), my_head.y)),
         ("right", Coord::new(my_head.x + 1, my_head.y)),
     ]
-    .iter()
+    .into_iter()
     .filter(|(_, coord)| is_field_safe(coord, board))
-    .map(|(m, _)| *m)
     .collect();
 
-    // Choose a random move from the safe ones
-    let chosen = safe_moves
-        .choose(&mut rand::thread_rng())
-        .unwrap_or(&"left");
+    // Choose best move
+    let chosen = choose(safe_moves, board).unwrap_or("left");
 
     // TODO: Step 4 - Move towards food instead of random, to regain health and survive longer
     // let food = &board.food;
@@ -79,4 +74,29 @@ fn is_field_safe(coord: &Coord, board: &Board) -> bool {
             .iter()
             .flat_map(|s| s.body.iter().rev().skip(1))
             .all(|c| c != coord)
+}
+
+fn choose(moves: Vec<(&'static str, Coord)>, board: &Board) -> Option<&'static str> {
+    // Choose a random move
+    /*moves
+    .choose(&mut rand::thread_rng())
+    .map(|(n, _)| *n)
+    .unwrap_or("left")*/
+
+    println!("Possible moves: {:?}", moves);
+
+    // choose move closest to any food
+    moves
+        .into_iter()
+        .min_by_key(|(_, c)| distance_to_next_food(c, board))
+        .map(|(n, _)| n)
+}
+
+fn distance_to_next_food(coord: &Coord, board: &Board) -> u32 {
+    board
+        .food
+        .iter()
+        .map(|f| coord.dist(f))
+        .min()
+        .unwrap_or(u32::MAX)
 }

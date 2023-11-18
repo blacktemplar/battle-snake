@@ -3,8 +3,10 @@ extern crate rocket;
 
 use log::info;
 use rocket::fairing::AdHoc;
+use rocket::figment::providers::Serialized;
 use rocket::http::Status;
 use rocket::serde::{json::Json, Deserialize};
+use rocket::State;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -51,10 +53,11 @@ pub struct Coord {
 
 impl Coord {
     pub fn new(x: u32, y: u32) -> Self {
-        Self {
-            x,
-            y,
-        }
+        Self { x, y }
+    }
+
+    pub fn dist(&self, other: &Coord) -> u32 {
+        self.x.abs_diff(other.x) + self.y.abs_diff(other.y)
     }
 }
 
@@ -67,8 +70,8 @@ pub struct GameState {
 }
 
 #[get("/")]
-fn handle_index() -> Json<Value> {
-    Json(logic::info())
+fn handle_index(config: &State<AppConfig>) -> Json<Value> {
+    Json(logic::info(config))
 }
 
 #[post("/start", format = "json", data = "<start_req>")]
@@ -102,6 +105,24 @@ fn handle_end(end_req: Json<GameState>) -> Status {
     Status::Ok
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
+struct AppConfig {
+    color: String,
+    head: String,
+    tail: String,
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            color: String::from("#1d682b"),
+            head: String::from("rose"),
+            tail: String::from("flytrap"),
+        }
+    }
+}
+
 #[launch]
 fn rocket() -> _ {
     // Lots of web hosting services expect you to bind to the port specified by the `PORT`
@@ -121,12 +142,15 @@ fn rocket() -> _ {
 
     info!("Starting Battlesnake Server...");
 
-    rocket::build()
+    let figment = rocket::Config::figment().join(Serialized::defaults(AppConfig::default()));
+
+    rocket::custom(figment)
         .attach(AdHoc::on_response("Server ID Middleware", |_, res| {
             Box::pin(async move {
                 res.set_raw_header("Server", "battlesnake/github/starter-snake-rust");
             })
         }))
+        .attach(AdHoc::config::<AppConfig>())
         .mount(
             "/",
             routes![handle_index, handle_start, handle_move, handle_end],
